@@ -1,0 +1,97 @@
+﻿@page "/admin/events/{Id:int}"
+@rendermode InteractiveServer
+@inject IEventService EventService
+@inject NavigationManager Nav
+
+@if (evt == null)
+{
+    <div class="text-center py-5 text-muted">Loading...</div>
+}
+else
+{
+    <div class="card border-0 shadow-sm">
+        <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+            <h4 class="mb-0 fw-bold">@evt.Name</h4>
+            <span class="badge bg-light text-dark">@evt.Date.ToString("dd MMM yyyy")</span>
+        </div>
+        <div class="card-body p-4">
+            <div class="row">
+                <div class="col-md-8">
+                    <p class="mb-2"><strong>Date & Time:</strong> @evt.Date.ToString("dddd, dd MMMM yyyy") at @evt.Time.ToString(@"hh\:mm")</p>
+                    <p class="mb-2"><strong>Venue:</strong> @evt.Venue?.Name — @evt.Venue?.Address (Capacity: @evt.Venue?.Capacity)</p>
+                    <p><strong>Description:</strong> @evt.Description</p>
+                </div>
+                <div class="col-md-4">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <h5 class="fw-bold">@evt.Registrations.Count</h5>
+                            <small>Registrations</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <h5 class="mt-4 mb-3">Activities</h5>
+            @if (evt.EventActivities.Any())
+            {
+                <div class="d-flex flex-wrap gap-2">
+                    @foreach (var ea in evt.EventActivities)
+                    {
+                        <span class="badge bg-secondary fs-6">@ea.Activity?.Name</span>
+                    }
+                </div>
+            }
+            else
+            {
+                <p class="text-muted">No activities listed.</p>
+            }
+
+            <h5 class="mt-4 mb-3">Registered Participants (@evt.Registrations.Count)</h5>
+            @if (evt.Registrations.Any())
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light">
+                            <tr><th>Name</th><th>Email</th><th>Status</th><th>Registered</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var reg in evt.Registrations)
+                            {
+                                <tr>
+                                    <td>@reg.Participant?.Name</td>
+                                    <td>@reg.Participant?.Email</td>
+                                    <td><span class="badge bg-@StatusColor(reg.Status)">@reg.Status</span></td>
+                                    <td>@reg.RegistrationDate.ToString("dd MMM yyyy")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else
+            {
+                <p class="text-muted">No registrations yet.</p>
+            }
+        </div>
+        <div class="card-footer bg-white d-flex gap-2">
+            <button class="btn btn-warning" @onclick='() => Nav.NavigateTo($"/admin/events/edit/{evt.EventId}")'>Edit</button>
+            <button class="btn btn-outline-secondary" @onclick='() => Nav.NavigateTo("/admin/events")'>Back</button>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+    private Event? evt;
+
+    protected override async Task OnInitializedAsync() =>
+        evt = await EventService.GetEventByIdAsync(Id);
+
+    private string StatusColor(string status) => status switch
+    {
+        "Confirmed" => "success",
+        "Cancelled" => "danger",
+        "Waitlisted" => "warning",
+        _ => "secondary"
+    };
+}

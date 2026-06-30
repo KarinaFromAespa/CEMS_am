@@ -1,0 +1,227 @@
+﻿@page "/admin/activities"
+@rendermode InteractiveServer
+@inject AppDbContext Db
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h3 class="fw-bold">Activities</h3>
+    <button class="btn btn-success" @onclick="() => showForm = true">
+        <i class="bi bi-plus-lg me-1"></i> Add Activity
+    </button>
+</div>
+
+<!-- POPUP EFFECT 1: Slide-in Success Notification Toast -->
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index: 1050">
+    <div class="toast align-items-center text-white bg-dark border-0 shadow-lg fade @(showToast ? "show animate__animated animate__slideInUp" : "hide")" role="alert" style="border-radius: 12px;">
+        <div class="d-flex p-2">
+            <div class="toast-body">
+                <i class="bi bi-check-circle-fill text-success me-2"></i> @toastMessage
+            </div>
+            <button type="button" class="btn-close btn-close-white m-auto me-2" @onclick="() => showToast = false"></button>
+        </div>
+    </div>
+</div>
+
+<!-- POPUP EFFECT 2: Dark Backdrop & Modal Confirmation Overlay -->
+@if (showDeleteConfirmation)
+{
+    <div class="modal-backdrop fade show"></div>
+    <div class="modal fade show d-block" tabindex="-1" style="top: 20%;">
+        <div class="modal-dialog modal-dialog-centered" style="max-width: 400px;">
+            <div class="modal-content border-0 shadow-lg p-3" style="border-radius: 16px;">
+                <div class="modal-body text-center">
+                    <div class="text-danger mb-3">
+                        <i class="bi bi-exclamation-triangle" style="font-size: 3rem;"></i>
+                    </div>
+                    <h5 class="fw-bold mb-2">Confirm Delete</h5>
+                    <p class="text-muted small px-3">
+                        Are you sure you want to permanently delete <strong class="text-dark">"@activityToDelete?.Name"</strong>? This action cannot be undone.
+                    </p>
+                </div>
+                <div class="d-flex gap-2 px-3 pb-2">
+                    <button class="btn btn-light w-50 fw-semibold" style="border-radius: 8px;" @onclick="CancelDelete">Cancel</button>
+                    <button class="btn btn-danger w-50 fw-semibold" style="border-radius: 8px;" @onclick="ConfirmDelete">Delete</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (showForm)
+{
+    <div class="card border-0 shadow-sm mb-4" style="border-radius: 12px;">
+        <div class="card-body">
+            <h5 class="card-title mb-3 fw-bold">@(editingId == null ? "New Activity" : "Edit Activity")</h5>
+            <div class="mb-3">
+                <label class="form-label text-muted small fw-semibold">Name</label>
+                <input class="form-control" @bind="form.Name" placeholder="e.g., Coding Workshop" style="border-radius: 8px;" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label text-muted small fw-semibold">Type</label>
+                <select class="form-select" @bind="form.Type" style="border-radius: 8px;">
+                    <option value="">-- Select Type --</option>
+                    <option>Workshop</option>
+                    <option>Talk</option>
+                    <option>Game</option>
+                    <option>Other</option>
+                </select>
+            </div>
+            @if (!string.IsNullOrEmpty(formError))
+            {
+                <div class="alert alert-danger py-2" style="border-radius: 8px;">@formError</div>
+            }
+            <div class="d-flex gap-2">
+                <button class="btn btn-primary px-4" style="border-radius: 8px;" @onclick="SaveActivity">Save</button>
+                <button class="btn btn-outline-secondary px-4" style="border-radius: 8px;" @onclick="CancelForm">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+<div class="card border-0 shadow-sm" style="border-radius: 12px; overflow: hidden;">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr><th>Name</th><th>Type</th><th class="text-end">Actions</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var a in activities)
+                {
+                    <tr>
+                        <td class="fw-semibold text-dark">@a.Name</td>
+                        <td><span class="badge bg-light text-secondary border px-2 py-1.5" style="border-radius: 6px;">@a.Type</span></td>
+                        <td class="text-end">
+                            <button class="btn btn-sm btn-outline-warning me-1 px-3" style="border-radius: 6px;" @onclick="() => StartEdit(a)">Edit</button>
+                            <button class="btn btn-sm btn-outline-danger px-3" style="border-radius: 6px;" @onclick="() => RequestDelete(a)">Delete</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@code {
+    [Inject] private SessionService Session { get; set; } = default!;
+    [Inject] private NavigationManager NavigationManager { get; set; } = default!;
+
+    private List<Activity> activities = new();
+    private Activity form = new();
+    private int? editingId;
+    private bool showForm;
+    private string formError = "";
+
+    // Effect State 1: Success Toast
+    private bool showToast;
+    private string toastMessage = "";
+
+    // Effect State 2: Custom Delete Confirmation Modal
+    private bool showDeleteConfirmation;
+    private Activity? activityToDelete;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Session.IsAdmin)
+        {
+            NavigationManager.NavigateTo("/admin/login");
+            return;
+        }
+        activities = await Db.Activities.ToListAsync();
+    }
+
+    private void StartEdit(Activity a)
+    {
+        editingId = a.ActivityId;
+        form = new Activity { Name = a.Name, Type = a.Type };
+        showForm = true;
+    }
+
+    private void CancelForm()
+    {
+        showForm = false;
+        editingId = null;
+        form = new();
+        formError = "";
+    }
+
+    // Triggers the modern custom popup notification
+    private async Task TriggerNotification(string message)
+    {
+        toastMessage = message;
+        showToast = true;
+        StateHasChanged();
+
+        await Task.Delay(3500); // Wait 3.5 seconds
+        showToast = false;
+        StateHasChanged();
+    }
+
+    private async Task SaveActivity()
+    {
+        formError = "";
+        if (string.IsNullOrWhiteSpace(form.Name)) { formError = "Name is required."; return; }
+        if (string.IsNullOrWhiteSpace(form.Type)) { formError = "Type is required."; return; }
+
+        try
+        {
+            string logMessage = "";
+            if (editingId.HasValue)
+            {
+                var existing = await Db.Activities.FindAsync(editingId.Value);
+                if (existing != null) { existing.Name = form.Name; existing.Type = form.Type; }
+                logMessage = $"\"{form.Name}\" was updated.";
+            }
+            else
+            {
+                Db.Activities.Add(form);
+                logMessage = $"\"{form.Name}\" was added successfully.";
+            }
+
+            await Db.SaveChangesAsync();
+            activities = await Db.Activities.ToListAsync();
+            CancelForm();
+            _ = TriggerNotification(logMessage);
+        }
+        catch (Exception ex)
+        {
+            formError = $"Error: {ex.Message}";
+        }
+    }
+
+    // Step 1: Open Custom Delete Popup Modal
+    private void RequestDelete(Activity targetActivity)
+    {
+        activityToDelete = targetActivity;
+        showDeleteConfirmation = true;
+    }
+
+    // Step 2a: Dismiss modal if user cancels
+    private void CancelDelete()
+    {
+        showDeleteConfirmation = false;
+        activityToDelete = null;
+    }
+
+    // Step 2b: Process deletion if user confirms
+    private async Task ConfirmDelete()
+    {
+        if (activityToDelete != null)
+        {
+            var target = await Db.Activities.FindAsync(activityToDelete.ActivityId);
+            if (target != null)
+            {
+                Db.Activities.Remove(target);
+                await Db.SaveChangesAsync();
+            }
+
+            string savedName = activityToDelete.Name;
+
+            // Clean up state
+            showDeleteConfirmation = false;
+            activityToDelete = null;
+            activities = await Db.Activities.ToListAsync();
+
+            // Fire success popup notification
+            _ = TriggerNotification($"\"{savedName}\" has been deleted.");
+        }
+    }
+}

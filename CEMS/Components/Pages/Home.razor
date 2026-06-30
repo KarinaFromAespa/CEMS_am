@@ -1,0 +1,217 @@
+﻿@page "/"
+@rendermode InteractiveServer
+@inject IEventService EventService
+@inject NavigationManager NavigationManager
+
+<PageTitle>CEMS – Community Event Management</PageTitle>
+
+<div class="hero-section rounded-4 mb-5 p-5 text-white position-relative overflow-hidden shadow-lg">
+    <div class="hero-overlay"></div>
+    <div class="position-relative" style="z-index:2">
+        <h1 class="display-4 fw-bold mb-3">Discover & Join Community Events</h1>
+        <p class="lead mb-4 opacity-90">Workshops, talks, games and more — right in your neighbourhood. Free to register.</p>
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="/events-public" class="btn btn-light btn-lg px-4 shadow-sm">
+                <span class="bi bi-calendar3 me-2"></span> Browse Events
+            </a>
+            <a href="/register" class="btn btn-outline-light btn-lg px-4">
+                <span class="bi bi-plus-circle me-2"></span> Register Now
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mb-5">
+    <div class="col-6 col-lg-3">
+        <div class="card border-0 shadow-sm text-center p-3 stat-card">
+            <div class="display-5 fw-bold text-primary">@eventCount</div>
+            <div class="text-muted small fw-semibold">Upcoming Events</div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="card border-0 shadow-sm text-center p-3 stat-card">
+            <div class="display-5 fw-bold text-success">@venueCount</div>
+            <div class="text-muted small fw-semibold">Venues</div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="card border-0 shadow-sm text-center p-3 stat-card">
+            <div class="display-5 fw-bold text-warning">@activityCount</div>
+            <div class="text-muted small fw-semibold">Activity Types</div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="card border-0 shadow-sm text-center p-3 stat-card">
+            <div class="display-5 fw-bold text-info">@registrationCount</div>
+            <div class="text-muted small fw-semibold">Registrations</div>
+        </div>
+    </div>
+</div>
+
+<div class="mb-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="fw-bold mb-0">🗓️ Upcoming Events</h4>
+        <a href="/events-public" class="btn btn-outline-primary btn-sm px-3">View All</a>
+    </div>
+
+    @if (upcomingEvents == null)
+    {
+        <div class="text-center py-5 text-muted">Loading events...</div>
+    }
+    else if (!upcomingEvents.Any())
+    {
+        <div class="text-center py-5 text-muted">No upcoming events yet. Check back soon!</div>
+    }
+    else
+    {
+        <div class="row g-4">
+            @{
+                int eventIndex = 0;   // will cycle through img1..img5
+            }
+            @foreach (var evt in upcomingEvents)
+            {
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100 border-0 shadow-sm event-card">
+                        <img src="img@(eventIndex % 5 + 1).jpg" class="card-img-top event-img" alt="@evt.Name" />
+                        <div class="card-body">
+                            <h5 class="card-title fw-bold">@evt.Name</h5>
+                            <p class="card-text text-muted small mb-1">
+                                <span class="me-2">📅 @evt.Date.ToString("dd MMM yyyy")</span>
+                                <span>⏰ @evt.Time.ToString(@"hh\:mm")</span>
+                            </p>
+                            <p class="card-text text-muted small mb-2">📍 @evt.Venue?.Name</p>
+                            @if (evt.EventActivities.Any())
+                            {
+                                <div>
+                                    @foreach (var ea in evt.EventActivities.Take(3))
+                                    {
+                                        <span class="badge bg-secondary me-1">@ea.Activity?.Name</span>
+                                    }
+                                </div>
+                            }
+                        </div>
+                        <div class="card-footer bg-white border-0 pt-0">
+                            <a href="/register" class="btn btn-primary btn-sm w-100">Register</a>
+                        </div>
+                    </div>
+                </div>
+                eventIndex++;
+            }
+        </div>
+    }
+</div>
+
+<div class="mb-5">
+    <h4 class="fw-bold mb-4">⚡ How It Works</h4>
+    <div class="row g-4">
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm text-center p-4 how-card">
+                <img src="img3.jpg" class="rounded-circle mx-auto mb-3 how-img" alt="Browse" />
+                <h5 class="fw-bold">1. Browse Events</h5>
+                <p class="text-muted small">Explore all upcoming community events filtered by date, venue, or activity type.</p>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm text-center p-4 how-card">
+                <img src="img4.jpg" class="rounded-circle mx-auto mb-3 how-img" alt="Register" />
+                <h5 class="fw-bold">2. Register</h5>
+                <p class="text-muted small">Sign up for events with just your name, email and phone. No account needed.</p>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm text-center p-4 how-card">
+                <img src="img5.jpg" class="rounded-circle mx-auto mb-3 how-img" alt="Track" />
+                <h5 class="fw-bold">3. Track Registrations</h5>
+                <p class="text-muted small">View all your registrations and their status — confirmed, waitlisted or cancelled.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card border-0 bg-dark text-white p-4 rounded-4 shadow">
+    <div class="row align-items-center">
+        <div class="col-md-8">
+            <h5 class="fw-bold mb-2">Ready to join the community?</h5>
+            <p class="text-white-50 mb-0">Register for an upcoming event today — it's free and takes less than a minute.</p>
+        </div>
+        <div class="col-md-4 text-md-end mt-3 mt-md-0">
+            <a href="/register" class="btn btn-light me-2 px-4">Register Now</a>
+        </div>
+    </div>
+</div>
+
+<style>
+    .hero-section {
+        min-height: 320px;
+        background: linear-gradient(135deg, #0d6efd, #6610f2);
+        background-size: cover;
+        background-position: center;
+        display: flex;
+        align-items: center;
+    }
+
+    .hero-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.35);
+    }
+
+    .stat-card {
+        border-radius: 1rem;
+        transition: transform 0.2s;
+    }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+        }
+
+    .event-img {
+        height: 160px;
+        object-fit: cover;
+    }
+
+    .event-card {
+        transition: box-shadow 0.2s, transform 0.2s;
+    }
+
+        .event-card:hover {
+            box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.1) !important;
+            transform: translateY(-1px);
+        }
+
+    .how-img {
+        width: 80px;
+        height: 80px;
+        object-fit: cover;
+        border: 3px solid #dee2e6;
+    }
+
+    .how-card {
+        transition: transform 0.2s;
+    }
+
+        .how-card:hover {
+            transform: scale(1.01);
+        }
+</style>
+
+@code {
+    private List<Event>? upcomingEvents;
+    private int eventCount, venueCount, activityCount, registrationCount;
+
+    [Inject] private AppDbContext Db { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var all = await EventService.GetAllEventsAsync();
+        upcomingEvents = all.Where(e => e.Date >= DateTime.Today).Take(3).ToList();
+
+        eventCount = all.Count(e => e.Date >= DateTime.Today);
+        venueCount = await Db.Venues.CountAsync();
+        activityCount = await Db.Activities.CountAsync();
+        registrationCount = await Db.Registrations.CountAsync();
+    }
+}

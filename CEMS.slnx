@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="CEMS.AppHost/CEMS.AppHost.csproj" />
+  <Project Path="CEMS.ServiceDefaults/CEMS.ServiceDefaults.csproj" />
+  <Project Path="CEMS/CEMS.csproj" />
+</Solution>

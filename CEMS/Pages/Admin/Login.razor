@@ -1,0 +1,71 @@
+﻿@page "/admin/login"
+@rendermode InteractiveServer
+@inject SessionService Session
+@inject NavigationManager NavigationManager
+
+<div class="admin-login-bg">
+    <div class="row justify-content-center align-items-center min-vh-100 m-0">
+        <div class="col-11 col-sm-8 col-md-5 col-lg-4">
+            <div class="card shadow-lg border-0 rounded-4 overflow-hidden">
+                <div class="card-header bg-dark text-white text-center py-3">
+                    <h4 class="mb-0 fw-bold"><i class="bi bi-shield-lock me-2"></i>Admin Access</h4>
+                </div>
+                <div class="card-body p-4">
+                    <p class="text-muted text-center mb-4">Enter the admin PIN to continue.</p>
+                    <div class="mb-3">
+                        <label class="form-label">PIN</label>
+                        <input type="password" class="form-control form-control-lg text-center"
+                               @bind="pin" @bind:event="oninput"
+                               @onkeydown="OnKeyDown" placeholder="••••••" />
+                    </div>
+                    @if (!string.IsNullOrEmpty(error))
+                    {
+                        <div class="alert alert-danger py-2 text-center small">@error</div>
+                    }
+                    <button class="btn btn-dark w-100 py-2" @onclick="Authenticate">Login</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .admin-login-bg {
+        background: url('/admin-login-bg.jpg') center/cover no-repeat;
+        min-height: 100vh;
+    }
+
+    .card-header {
+        background: linear-gradient(135deg, #1e1e2d, #2c2c3a) !important;
+    }
+</style>
+
+@code {
+    private string pin = "";
+    private string error = "";
+
+    protected override void OnInitialized()
+    {
+        if (Session.IsAdmin)
+            NavigationManager.NavigateTo("/admin");
+    }
+
+    private void OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") Authenticate();
+    }
+
+    private async void Authenticate()
+    {
+        if (Session.TryLogin(pin))
+        {
+            await Task.Yield();
+            NavigationManager.NavigateTo("/admin", forceLoad: true);
+        }
+        else
+        {
+            error = "Incorrect PIN. Try again.";
+            pin = "";
+        }
+    }
+}

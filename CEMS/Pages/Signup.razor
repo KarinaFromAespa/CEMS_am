@@ -1,0 +1,143 @@
+@page "/signup"
+@rendermode InteractiveServer
+@inject AppDbContext Db
+@inject SessionService Session
+@inject NavigationManager Nav
+
+<div class="auth-bg">
+    <div class="row justify-content-center align-items-center min-vh-100 m-0">
+        <div class="col-11 col-sm-9 col-md-7 col-lg-5 col-xl-4">
+            <div class="card shadow-lg border-0 rounded-4 overflow-hidden">
+                <div class="card-header bg-success text-white text-center py-3">
+                    <h4 class="mb-0 fw-bold"><i class="bi bi-person-plus me-2"></i>Create Account</h4>
+                </div>
+                <div class="card-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label">Full Name</label>
+                        <input class="form-control" @bind="name" placeholder="Jane Smith" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" class="form-control" @bind="email" placeholder="jane@example.com" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Phone</label>
+                        <input type="tel" class="form-control" @bind="phone" placeholder="+447700123456" />
+                        <div class="form-text">Include country code, e.g. +44 and 10 digits.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Password</label>
+                        <input type="password" class="form-control" @bind="password" />
+                        <div class="form-text">Min 8 chars, uppercase, lowercase, number & special character.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Confirm Password</label>
+                        <input type="password" class="form-control" @bind="confirmPassword" />
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(error))
+                    {
+                        <div class="alert alert-danger py-2">@error</div>
+                    }
+
+                    <button class="btn btn-success btn-lg w-100" @onclick="DoSignup">Create Account</button>
+                    <p class="text-center mt-3 mb-0 text-muted small">
+                        Already have an account? <a href="/login" class="fw-semibold">Log in</a>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .auth-bg {
+        background: url('/signup-bg.jpg') center/cover no-repeat;
+        min-height: 100vh;
+    }
+</style>
+
+
+@code {
+    private string name = "", email = "", phone = "", password = "", confirmPassword = "";
+    private string error = "";
+
+    private bool IsValidEmail(string mail)
+    {
+        try
+        {
+            var addr = new System.Net.Mail.MailAddress(mail);
+            return addr.Address == mail && addr.Host.Contains('.');
+        }
+        catch { return false; }
+    }
+
+    private bool IsValidPassword(string pw, out string pwError)
+    {
+        pwError = "";
+        if (pw.Length < 8) { pwError = "Password must be at least 8 characters."; return false; }
+        if (!pw.Any(char.IsUpper)) { pwError = "Password must contain at least one uppercase letter."; return false; }
+        if (!pw.Any(char.IsLower)) { pwError = "Password must contain at least one lowercase letter."; return false; }
+        if (!pw.Any(char.IsDigit)) { pwError = "Password must contain at least one number."; return false; }
+        if (!pw.Any(c => !char.IsLetterOrDigit(c))) { pwError = "Password must contain at least one special character."; return false; }
+        return true;
+    }
+
+    private bool IsValidPhone(string ph, out string phError)
+    {
+        phError = "";
+        var digits = ph.Replace(" ", "").Replace("-", "");
+        if (!digits.StartsWith("+"))
+        {
+            phError = "Phone number must start with a country code (e.g. +44).";
+            return false;
+        }
+        var afterPlus = digits.Substring(1);
+        if (!afterPlus.All(char.IsDigit))
+        {
+            phError = "Phone number may only contain digits after the country code prefix.";
+            return false;
+        }
+        if (afterPlus.Length < 11 || afterPlus.Length > 13)
+        {
+            phError = "Phone number must have a country code plus 10 digits (e.g. +447700123456).";
+            return false;
+        }
+        return true;
+    }
+
+    protected override void OnInitialized()
+    {
+        if (Session.IsLoggedIn) Nav.NavigateTo("/account");
+    }
+
+    private async Task DoSignup()
+    {
+        error = "";
+
+        if (string.IsNullOrWhiteSpace(name)) { error = "Name is required."; return; }
+        if (string.IsNullOrWhiteSpace(email) || !IsValidEmail(email)) { error = "A valid email address is required (e.g. user@example.com)."; return; }
+        if (string.IsNullOrWhiteSpace(phone)) { error = "Phone number is required."; return; }
+        if (!IsValidPhone(phone.Trim(), out var phError)) { error = phError; return; }
+        if (!IsValidPassword(password, out var pwError)) { error = pwError; return; }
+        if (password != confirmPassword) { error = "Passwords do not match."; return; }
+
+        bool emailTaken = await Db.Participants.AnyAsync(p => p.Email == email.Trim().ToLower());
+        if (emailTaken) { error = "An account with that email already exists."; return; }
+
+        var participant = new Participant
+        {
+            Name = name.Trim(),
+            Email = email.Trim().ToLower(),
+            Phone = phone.Trim(),
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(password),
+            CreatedAt = DateTime.UtcNow
+        };
+
+        Db.Participants.Add(participant);
+        await Db.SaveChangesAsync();
+
+        Session.LoginParticipant(participant.ParticipantId, participant.Name);
+        Nav.NavigateTo("/account");
+    }
+}

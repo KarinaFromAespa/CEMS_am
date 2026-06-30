@@ -1,0 +1,172 @@
+﻿@page "/admin/events/create"
+@page "/admin/events/edit/{Id:int}"
+@rendermode InteractiveServer
+
+<h3 class="fw-bold mb-4">@(Id == null ? "Create Event" : "Edit Event")</h3>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-body p-4">
+        <EditForm Model="model" OnValidSubmit="HandleSubmit" FormName="eventForm">
+            <DataAnnotationsValidator />
+            <ValidationSummary class="text-danger" />
+
+            <div class="mb-3">
+                <label class="form-label">Event Name</label>
+                <InputText class="form-control" @bind-Value="model.Name" placeholder="Summer Festival" />
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">Date</label>
+                    <InputDate class="form-control" @bind-Value="model.Date" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Time (HH:MM)</label>
+                    <input type="time"
+                           class="form-control"
+                           value="@timeString"
+                           @onchange="OnTimeChanged" />
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Description</label>
+                <InputTextArea class="form-control" rows="3" @bind-Value="model.Description" placeholder="What's the event about?" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Venue</label>
+                <InputSelect class="form-select" @bind-Value="model.VenueId">
+                    <option value="0">-- Select Venue --</option>
+                    @foreach (var v in venues)
+                    {
+                        <option value="@v.VenueId">@v.Name</option>
+                    }
+                </InputSelect>
+            </div>
+
+            <div class="mb-4">
+                <label class="form-label">Activities</label>
+                <div class="row">
+                    @foreach (var activity in allActivities)
+                    {
+                        <div class="col-md-4 col-sm-6">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox"
+                                       id="act_@activity.ActivityId"
+                                       checked="@selectedActivityIds.Contains(activity.ActivityId)"
+                                       @onchange="e => ActivityChanged(activity.ActivityId, e)" />
+                                <label class="form-check-label" for="act_@activity.ActivityId">
+                                    @activity.Name <span class="badge bg-light text-dark ms-1">@activity.Type</span>
+                                </label>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary px-4">@(Id == null ? "Create" : "Save Changes")</button>
+                <button type="button" class="btn btn-outline-secondary px-4" @onclick='() => NavigationManager.NavigateTo("/admin/events")'>Cancel</button>
+            </div>
+
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-danger mt-3">@errorMessage</div>
+            }
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    [Inject] private SessionService Session { get; set; } = default!;
+    [Parameter] public int? Id { get; set; }
+
+    [Inject] private IEventService EventService { get; set; } = default!;
+    [Inject] private NavigationManager NavigationManager { get; set; } = default!;
+    [Inject] private AppDbContext DbContext { get; set; } = default!;
+
+    private Event model = new() { Date = DateTime.Today };
+    private List<Venue> venues = new();
+    private List<CEMS.Models.Activity> allActivities = new();
+    private HashSet<int> selectedActivityIds = new();
+    private string timeString = "09:00";
+    private string errorMessage = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Session.IsAdmin)
+        {
+            NavigationManager.NavigateTo("/admin/login");
+            return;
+        }
+        venues = await DbContext.Venues.ToListAsync();
+        allActivities = await DbContext.Activities.ToListAsync();
+
+        if (Id.HasValue)
+        {
+            var existing = await EventService.GetEventByIdAsync(Id.Value);
+            if (existing != null)
+            {
+                model = existing;
+                timeString = model.Time.ToString(@"hh\:mm");
+                selectedActivityIds = existing.EventActivities
+                    .Select(ea => ea.ActivityId).ToHashSet();
+            }
+        }
+    }
+
+    private void OnTimeChanged(ChangeEventArgs e)
+    {
+        timeString = e.Value?.ToString() ?? "09:00";
+    }
+
+    private void ActivityChanged(int activityId, ChangeEventArgs e)
+    {
+        bool isChecked =
+            bool.TryParse(e.Value?.ToString(), out var result) && result;
+
+        ToggleActivity(activityId, isChecked);
+    }
+
+    private void ToggleActivity(int activityId, bool isChecked)
+    {
+        if (isChecked) selectedActivityIds.Add(activityId);
+        else selectedActivityIds.Remove(activityId);
+    }
+
+    private async Task HandleSubmit()
+    {
+        try
+        {
+            if (model.VenueId == 0)
+            {
+                errorMessage = "Please select a venue.";
+                return;
+            }
+
+            if (TimeSpan.TryParse(timeString, out var parsed))
+                model.Time = parsed;
+            else
+            {
+                errorMessage = "Invalid time format.";
+                return;
+            }
+
+            model.EventActivities = selectedActivityIds
+                .Select(id => new EventActivity { ActivityId = id })
+                .ToList();
+
+            if (Id.HasValue)
+                await EventService.UpdateEventAsync(model);
+            else
+                await EventService.CreateEventAsync(model);
+
+            NavigationManager.NavigateTo("/admin/events");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error saving event: {ex.Message}";
+        }
+    }
+}

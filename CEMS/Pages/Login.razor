@@ -1,0 +1,85 @@
+@page "/login"
+@rendermode InteractiveServer
+@inject AppDbContext Db
+@inject SessionService Session
+@inject NavigationManager Nav
+
+<div class="auth-bg">
+    <div class="row justify-content-center align-items-center min-vh-100 m-0">
+        <div class="col-11 col-sm-8 col-md-5 col-lg-4">
+            <div class="card shadow-lg border-0 rounded-4 overflow-hidden">
+                <div class="card-header bg-primary text-white text-center py-3">
+                    <h4 class="mb-0 fw-bold"><i class="bi bi-box-arrow-in-right me-2"></i>Log In</h4>
+                </div>
+                <div class="card-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" class="form-control form-control-lg" @bind="email" @onkeydown="OnKey" placeholder="jane@email.com" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Password</label>
+                        <input type="password" class="form-control form-control-lg" @bind="password" @onkeydown="OnKey" />
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(error))
+                    {
+                        <div class="alert alert-danger py-2">@error</div>
+                    }
+
+                    <button class="btn btn-primary btn-lg w-100" @onclick="DoLogin">Log In</button>
+                    <p class="text-center mt-3 mb-0 text-muted small">
+                        No account? <a href="/signup" class="fw-semibold">Sign up</a>
+                    </p>
+                    <hr />
+                    <p class="text-center mb-0">
+                        <a class="text-warning small fw-semibold" href="/admin/login">Admin login →</a>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .auth-bg {
+        background: url('/login-bg.jpg') center/cover no-repeat;
+        min-height: 100vh;
+    }
+</style>
+
+@code {
+    private string email = "", password = "", error = "";
+
+    protected override void OnInitialized()
+    {
+        if (Session.IsLoggedIn) Nav.NavigateTo("/account");
+    }
+
+    private async Task OnKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await DoLogin();
+    }
+
+    private async Task DoLogin()
+    {
+        error = "";
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
+        {
+            error = "Please enter your email and password.";
+            return;
+        }
+
+        var participant = await Db.Participants
+            .FirstOrDefaultAsync(p => p.Email == email.Trim().ToLower());
+
+        if (participant == null || string.IsNullOrEmpty(participant.PasswordHash) ||
+            !BCrypt.Net.BCrypt.Verify(password, participant.PasswordHash))
+        {
+            error = "Invalid email or password.";
+            return;
+        }
+
+        Session.LoginParticipant(participant.ParticipantId, participant.Name);
+        Nav.NavigateTo("/account");
+    }
+}

@@ -1,0 +1,116 @@
+﻿@page "/admin"
+@rendermode InteractiveServer
+@inject SessionService Session
+@inject NavigationManager NavigationManager
+@inject AppDbContext Db
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h3 class="fw-bold">Dashboard</h3>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-xl-2 col-md-4 col-6">
+        <div class="card border-0 shadow-sm text-white bg-primary rounded-3">
+            <div class="card-body text-center py-3">
+                <h2 class="fw-bold">@eventCount</h2>
+                <p class="mb-0 small opacity-75">Events</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-2 col-md-4 col-6">
+        <div class="card border-0 shadow-sm text-white bg-success rounded-3">
+            <div class="card-body text-center py-3">
+                <h2 class="fw-bold">@participantCount</h2>
+                <p class="mb-0 small opacity-75">Participants</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-2 col-md-4 col-6">
+        <div class="card border-0 shadow-sm text-white bg-warning rounded-3">
+            <div class="card-body text-center py-3">
+                <h2 class="fw-bold">@venueCount</h2>
+                <p class="mb-0 small opacity-75">Venues</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-2 col-md-4 col-6">
+        <div class="card border-0 shadow-sm text-white bg-info rounded-3">
+            <div class="card-body text-center py-3">
+                <h2 class="fw-bold">@registrationCount</h2>
+                <p class="mb-0 small opacity-75">Registrations</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-2 col-md-4 col-6">
+        <div class="card border-0 shadow-sm text-white bg-danger rounded-3">
+            <div class="card-body text-center py-3">
+                <h2 class="fw-bold">@pendingCount</h2>
+                <p class="mb-0 small opacity-75">Pending</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    @{
+        var cards = new[]
+        {
+            new { Title = "Events", Desc = "Create, edit, delete", Color = "primary", Url = "/admin/events", Extra = "" },
+            new { Title = "Participants", Desc = "View, manage", Color = "success", Url = "/admin/participants", Extra = "" },
+            new { Title = "Venues", Desc = "Add, update", Color = "warning", Url = "/admin/venues", Extra = "" },
+            new { Title = "Activities", Desc = "Manage types", Color = "info", Url = "/admin/activities", Extra = "" },
+            new { Title = "Registrations", Desc = "Approve/reject", Color = "danger", Url = "/admin/registrations", Extra = $"({pendingCount} pending)" }
+        };
+    }
+    @foreach (var item in cards)
+    {
+        <div class="col-xl-2 col-md-4 col-sm-6">
+            <div class="card h-100 border-0 shadow-sm manage-card">
+                <div class="card-body text-center">
+                    <h5 class="card-title">@item.Title</h5>
+                    <p class="text-muted small mb-3">@item.Desc</p>
+                    <a href="@item.Url" class="btn btn-@item.Color btn-sm w-100 stretched-link">
+                        Manage @item.Extra
+                    </a>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<style>
+    .manage-card {
+        transition: transform 0.15s, box-shadow 0.15s;
+        border-radius: 0.75rem;
+    }
+
+        .manage-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.1) !important;
+        }
+</style>
+
+@code {
+    private int eventCount, participantCount, venueCount, registrationCount, pendingCount;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Session.IsAdmin)
+        {
+            NavigationManager.NavigateTo("/admin/login");
+            return;
+        }
+
+        eventCount = await Db.Events.CountAsync();
+        participantCount = await Db.Participants.CountAsync();
+        venueCount = await Db.Venues.CountAsync();
+        registrationCount = await Db.Registrations.CountAsync();
+        pendingCount = await Db.Registrations.CountAsync(r => r.Status == "Pending");
+    }
+
+    private void Logout()
+    {
+        Session.Logout();
+        NavigationManager.NavigateTo("/");
+    }
+}

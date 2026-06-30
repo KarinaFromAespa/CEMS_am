@@ -1,0 +1,193 @@
+﻿@page "/admin/events"
+@rendermode InteractiveServer
+@inject IEventService EventService
+@inject NavigationManager Nav
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h3 class="fw-bold">Events</h3>
+    <button class="btn btn-success" @onclick='() => Nav.NavigateTo("/admin/events/create")'>
+        <i class="bi bi-plus-lg me-1"></i> New Event
+    </button>
+</div>
+
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index: 1050">
+    <div class="toast align-items-center text-white bg-dark border-0 shadow-lg fade @(showToast ? "show" : "hide")" role="alert" style="border-radius: 12px;">
+        <div class="d-flex p-2">
+            <div class="toast-body">
+                <i class="bi bi-check-circle-fill text-success me-2"></i> @message
+            </div>
+            <button type="button" class="btn-close btn-close-white m-auto me-2" @onclick="() => showToast = false"></button>
+        </div>
+    </div>
+</div>
+
+@if (showDeleteConfirmation)
+{
+    <div class="modal-backdrop fade show" style="z-index: 1040;"></div>
+    <div class="modal fade show d-block" tabindex="-1" style="top: 20%; z-index: 1050;">
+        <div class="modal-dialog modal-dialog-centered" style="max-width: 400px;">
+            <div class="modal-content border-0 shadow-lg p-3" style="border-radius: 16px;">
+                <div class="modal-body text-center">
+                    <div class="text-danger mb-3">
+                        <i class="bi bi-exclamation-triangle" style="font-size: 3rem;"></i>
+                    </div>
+                    <h5 class="fw-bold mb-2">Confirm Delete</h5>
+                    <p class="text-muted small px-3">
+                        Are you sure you want to permanently delete <strong class="text-dark">"@eventToDelete?.Name"</strong>? This action cannot be undone.
+                    </p>
+                </div>
+                <div class="d-flex gap-2 px-3 pb-2">
+                    <button type="button" class="btn btn-light w-50 fw-semibold" style="border-radius: 8px;" @onclick="CancelDelete">Cancel</button>
+                    <button type="button" class="btn btn-danger w-50 fw-semibold" style="border-radius: 8px;" @onclick="ConfirmDelete">Delete</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label small fw-semibold">Date</label>
+                <input type="date" class="form-control" @bind="filterDate" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-semibold">Venue</label>
+                <select class="form-select" @bind="filterVenueId">
+                    <option value="">-- All Venues --</option>
+                    @foreach (var v in venues)
+                    {
+                        <option value="@v.VenueId">@v.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-3 d-flex gap-2">
+                <button class="btn btn-primary" @onclick="ApplyFilter"><i class="bi bi-funnel me-1"></i>Filter</button>
+                <button class="btn btn-outline-secondary" @onclick="ClearFilter">Clear</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (events == null)
+{
+    <div class="text-center py-5 text-muted">Loading...</div>
+}
+else if (!events.Any())
+{
+    <div class="text-center py-5 text-muted">No events found.</div>
+}
+else
+{
+    <div class="card border-0 shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Name</th>
+                        <th>Date</th>
+                        <th>Venue</th>
+                        <th>Activities</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var evt in events)
+                    {
+                        <tr>
+                            <td class="fw-semibold">@evt.Name</td>
+                            <td>@evt.Date.ToString("dd MMM yyyy") @evt.Time.ToString(@"hh\:mm")</td>
+                            <td>@evt.Venue?.Name</td>
+                            <td>@string.Join(", ", evt.EventActivities.Select(ea => ea.Activity?.Name))</td>
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-outline-info me-1" @onclick="() => ViewEvent(evt.EventId)">View</button>
+                                <button class="btn btn-sm btn-outline-warning me-1" @onclick="() => EditEvent(evt.EventId)">Edit</button>
+                                <button class="btn btn-sm btn-outline-danger" @onclick="() => RequestDelete(evt)">Delete</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Event> events = new();
+    private List<Venue> venues = new();
+    private DateTime? filterDate;
+    private int? filterVenueId;
+    private string message = "";
+
+    // Popup State Handlers
+    private bool showToast = false;
+    private bool showDeleteConfirmation = false;
+    private Event? eventToDelete;
+
+    [Inject] private AppDbContext DbContext { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        venues = await DbContext.Venues.ToListAsync();
+        await LoadEvents();
+    }
+
+    private async Task LoadEvents() =>
+        events = await EventService.GetAllEventsAsync();
+
+    private async Task ApplyFilter() =>
+        events = await EventService.FilterEventsAsync(filterDate, filterVenueId == 0 ? null : filterVenueId, null);
+
+    private async Task ClearFilter()
+    {
+        filterDate = null;
+        filterVenueId = null;
+        await LoadEvents();
+    }
+
+    private void ViewEvent(int id) => Nav.NavigateTo($"/admin/events/{id}");
+    private void EditEvent(int id) => Nav.NavigateTo($"/admin/events/edit/{id}");
+
+    // Step 1: Open the modal and contextually capture which event is selected
+    private void RequestDelete(Event targetEvent)
+    {
+        eventToDelete = targetEvent;
+        showDeleteConfirmation = true;
+    }
+
+    // Step 2a: Reset structural popup pointers if cancelled
+    private void CancelDelete()
+    {
+        showDeleteConfirmation = false;
+        eventToDelete = null;
+    }
+
+    // Step 2b: Process deletion sequence from service level layer
+    private async Task ConfirmDelete()
+    {
+        if (eventToDelete != null)
+        {
+            await EventService.DeleteEventAsync(eventToDelete.EventId);
+
+            string deletedName = eventToDelete.Name;
+            showDeleteConfirmation = false;
+            eventToDelete = null;
+
+            await LoadEvents();
+            _ = ShowToastNotification($"Event \"{deletedName}\" deleted successfully.");
+        }
+    }
+
+    // Displays the success toast and auto-hides after 3 seconds
+    private async Task ShowToastNotification(string statusMsg)
+    {
+        message = statusMsg;
+        showToast = true;
+        StateHasChanged();
+
+        await Task.Delay(3000);
+        showToast = false;
+        StateHasChanged();
+    }
+}

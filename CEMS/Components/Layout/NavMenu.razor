@@ -1,0 +1,122 @@
+@rendermode InteractiveServer
+@implements IDisposable
+@inject SessionService Session
+@inject NavigationManager NavigationManager
+
+<div class="top-row ps-3 navbar navbar-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="">CEMS</a>
+    </div>
+</div>
+
+<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+
+<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
+    <nav class="flex-column">
+
+        @if (Session.IsAdmin)
+        {
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="/admin">
+                    <span class="bi bi-speedometer2" aria-hidden="true"></span> Dashboard
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="/admin/events">
+                    <span class="bi bi-calendar-event" aria-hidden="true"></span> Events
+                </NavLink>
+            </div> 
+
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="/admin/registrations">
+                    <span class="bi bi-calendar-event" aria-hidden="true"></span> Registration
+                </NavLink>
+            </div>
+
+            
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="/admin/participants">
+                    <span class="bi bi-people" aria-hidden="true"></span> Participants
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="/admin/venues">
+                    <span class="bi bi-geo-alt" aria-hidden="true"></span> Venues
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="/admin/activities">
+                    <span class="bi bi-lightning" aria-hidden="true"></span> Activities
+                </NavLink>
+            </div>
+            <div class="nav-item px-3 mt-3">
+                <button class="btn btn-sm btn-outline-light w-100" @onclick="AdminLogout">Logout</button>
+            </div>
+        }
+        else if (Session.IsLoggedIn)
+        {
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                    <span class="bi bi-house-door" aria-hidden="true"></span> Home
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="/events-public">
+                    <span class="bi bi-calendar3" aria-hidden="true"></span> Browse Events
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="/register">
+                    <span class="bi bi-plus-circle" aria-hidden="true"></span> Register for Event
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="/account">
+                    <span class="bi bi-person-circle" aria-hidden="true"></span> My Account
+                </NavLink>
+            </div>
+            <div class="nav-item px-3 mt-3">
+                <button class="btn btn-sm btn-outline-light w-100" @onclick="UserLogout">Logout</button>
+            </div>
+        }
+        else
+        {
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                    <span class="bi bi-house-door" aria-hidden="true"></span> Home
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="/events-public">
+                    <span class="bi bi-calendar3" aria-hidden="true"></span> Browse Events
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="/login">
+                    <span class="bi bi-box-arrow-in-right" aria-hidden="true"></span> Log In
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="/signup">
+                    <span class="bi bi-person-plus" aria-hidden="true"></span> Sign Up
+                </NavLink>
+            </div>
+        }
+
+    </nav>
+</div>
+
+@code {
+    protected override void OnInitialized()
+    {
+        Session.OnChange += StateHasChanged;
+    }
+
+    public void Dispose()
+    {
+        Session.OnChange -= StateHasChanged;
+    }
+
+    private void AdminLogout() { Session.Logout(); NavigationManager.NavigateTo("/"); }
+    private void UserLogout() { Session.LogoutParticipant(); NavigationManager.NavigateTo("/"); }
+}

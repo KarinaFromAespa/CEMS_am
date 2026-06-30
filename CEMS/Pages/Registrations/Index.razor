@@ -1,0 +1,204 @@
+﻿@page "/admin/registrations"
+@rendermode InteractiveServer
+@inject AppDbContext Db
+
+<h3 class="fw-bold mb-4">Registrations</h3>
+
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body">
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+            <span class="fw-semibold me-2">Status:</span>
+            @foreach (var s in new[] { "All", "Pending", "Confirmed", "Cancelled", "Waitlisted" })
+            {
+                <button class="btn btn-sm @(filterStatus == s ? "btn-dark" : "btn-outline-secondary")"
+                        @onclick="() => { filterStatus = s; }">
+                    @s
+                </button>
+            }
+        </div>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(actionMessage))
+{
+    <div class="alert alert-@actionMessageType alert-dismissible fade show shadow-sm" role="alert">
+        @actionMessage
+        <button type="button" class="btn-close" @onclick="DismissAlert"></button>
+    </div>
+}
+
+<div class="card border-0 shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Participant</th>
+                    <th>Email</th>
+                    <th>Event</th>
+                    <th>Date</th>
+                    <th>Status</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var reg in FilteredRegistrations)
+                {
+                    <tr>
+                        <td>@reg.Participant?.Name</td>
+                        <td>@reg.Participant?.Email</td>
+                        <td>@reg.Event?.Name</td>
+                        <td>@reg.RegistrationDate.ToString("dd MMM yyyy")</td>
+                        <td><span class="badge bg-@StatusColor(reg.Status)">@reg.Status</span></td>
+                        <td class="text-end">
+                            @if (reg.Status == "Pending")
+                            {
+                                <button class="btn btn-sm btn-success me-1" @onclick="() => Approve(reg.RegistrationId)">Approve</button>
+                                <button class="btn btn-sm btn-outline-danger" @onclick="() => Reject(reg.RegistrationId)">Reject</button>
+                            }
+                            else if (reg.Status == "Confirmed")
+                            {
+                                <button class="btn btn-sm btn-outline-danger" @onclick="() => Reject(reg.RegistrationId)">Cancel</button>
+                            }
+                            else if (reg.Status == "Cancelled" || reg.Status == "Waitlisted")
+                            {
+                                <button class="btn btn-sm btn-outline-success" @onclick="() => Approve(reg.RegistrationId)">Approve</button>
+                            }
+                        </td>
+                    </tr>
+                }
+                @if (!FilteredRegistrations.Any())
+                {
+                    <tr><td colspan="6" class="text-center text-muted py-4">No registrations found.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@code {
+    [Inject] private SessionService Session { get; set; } = default!;
+    [Inject] private NavigationManager NavigationManager { get; set; } = default!;
+
+    private List<Registration> registrations = new();
+    private string filterStatus = "Pending";
+    private string actionMessage = "";
+    private string actionMessageType = "success";
+
+    private IEnumerable<Registration> FilteredRegistrations =>
+        filterStatus == "All"
+            ? registrations
+            : registrations.Where(r => r.Status == filterStatus);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Session.IsAdmin)
+        {
+            NavigationManager.NavigateTo("/admin/login");
+            return;
+        }
+        await LoadRegistrations();
+    }
+
+    private async Task LoadRegistrations()
+    {
+        registrations = await Db.Registrations
+            .Include(r => r.Participant)
+            .Include(r => r.Event)
+            .OrderByDescending(r => r.RegistrationDate)
+            .ToListAsync();
+    }
+
+    private async Task Approve(int id)
+    {
+        var reg = await Db.Registrations
+            .AsNoTracking()
+            .Include(r => r.Event).ThenInclude(e => e!.Venue)
+            .Include(r => r.Participant)
+            .FirstOrDefaultAsync(r => r.RegistrationId == id);
+        if (reg == null) return;
+
+        var confirmedCount = await Db.Registrations
+            .CountAsync(r => r.EventId == reg.EventId && r.Status == "Confirmed" && r.RegistrationId != id);
+
+        bool atCapacity = reg.Event?.Venue != null && confirmedCount >= reg.Event.Venue.Capacity;
+
+        if (atCapacity && reg.Status == "Waitlisted")
+        {
+            actionMessageType = "warning";
+            actionMessage = $"Cannot confirm {reg.Participant?.Name} for \"{reg.Event?.Name}\" — the venue \"{reg.Event?.Venue?.Name}\" is at full capacity ({reg.Event?.Venue?.Capacity} spots). A spot must be freed before this registration can be confirmed.";
+            return;
+        }
+
+        var regToConfirm = await Db.Registrations.FindAsync(id);
+        if (regToConfirm == null) return;
+        regToConfirm.Status = atCapacity ? "Waitlisted" : "Confirmed";
+        await Db.SaveChangesAsync();
+        Db.ChangeTracker.Clear();
+
+        actionMessageType = atCapacity ? "warning" : "success";
+        actionMessage = atCapacity
+            ? $"{reg.Participant?.Name}'s registration for \"{reg.Event?.Name}\" has been added to the waitlist — venue is at full capacity."
+            : $"{reg.Participant?.Name} has been confirmed for \"{reg.Event?.Name}\".";
+
+        await LoadRegistrations();
+    }
+
+    private async Task Reject(int id)
+    {
+        var reg = await Db.Registrations
+            .AsNoTracking()
+            .Include(r => r.Participant)
+            .Include(r => r.Event)
+            .FirstOrDefaultAsync(r => r.RegistrationId == id);
+        if (reg == null) return;
+
+        bool wasConfirmed = reg.Status == "Confirmed";
+        int eventId = reg.EventId;
+
+        var regToCancel = await Db.Registrations.FindAsync(id);
+        if (regToCancel == null) return;
+        regToCancel.Status = "Cancelled";
+        await Db.SaveChangesAsync();
+        Db.ChangeTracker.Clear();
+
+        actionMessageType = "success";
+
+        if (wasConfirmed)
+        {
+            var nextWaitlisted = await Db.Registrations
+                .Include(r => r.Participant)
+                .Where(r => r.EventId == eventId && r.Status == "Waitlisted")
+                .OrderBy(r => r.RegistrationDate)
+                .FirstOrDefaultAsync();
+
+            if (nextWaitlisted != null)
+            {
+                nextWaitlisted.Status = "Confirmed";
+                await Db.SaveChangesAsync();
+                Db.ChangeTracker.Clear();
+                actionMessage = $"Registration for {reg.Participant?.Name} → {reg.Event?.Name} cancelled. {nextWaitlisted.Participant?.Name} has been automatically confirmed from the waitlist.";
+            }
+            else
+            {
+                actionMessage = $"Registration for {reg.Participant?.Name} → {reg.Event?.Name} has been cancelled.";
+            }
+        }
+        else
+        {
+            actionMessage = $"Registration for {reg.Participant?.Name} → {reg.Event?.Name} has been cancelled.";
+        }
+
+        await LoadRegistrations();
+    }
+
+    private string StatusColor(string status) => status switch
+    {
+        "Confirmed" => "success",
+        "Cancelled" => "danger",
+        "Waitlisted" => "warning",
+        "Pending" => "secondary",
+        _ => "secondary"
+    };
+
+    private void DismissAlert() { actionMessage = ""; actionMessageType = "success"; }
+}

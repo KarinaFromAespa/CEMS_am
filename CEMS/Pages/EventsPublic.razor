@@ -1,0 +1,125 @@
+﻿@page "/events-public"
+@rendermode InteractiveServer
+@inject IEventService EventService
+@inject SessionService Session
+
+<h3 class="fw-bold mb-4">📅 Upcoming Events</h3>
+
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label small fw-semibold">Date</label>
+                <input type="date" class="form-control"
+                       value="@filterDate?.ToString("yyyy-MM-dd")"
+                       @onchange="e => { filterDate = e.Value != null && !string.IsNullOrEmpty(e.Value.ToString()) ? DateTime.Parse(e.Value.ToString()!) : null; }" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-semibold">Activity Type</label>
+                <select class="form-select" @onchange="e => filterActivity = e.Value?.ToString()">
+                    <option value="">-- All --</option>
+                    <option>Workshop</option>
+                    <option>Talk</option>
+                    <option>Game</option>
+                    <option>Other</option>
+                </select>
+            </div>
+            <div class="col-md-2 d-flex gap-2">
+                <button class="btn btn-primary" @onclick="ApplyFilter"><i class="bi bi-funnel me-1"></i>Filter</button>
+                <button class="btn btn-outline-secondary" @onclick="ClearFilter">Clear</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (events == null)
+{
+    <div class="text-center py-5 text-muted">Loading...</div>
+}
+else if (!events.Any())
+{
+    <div class="text-center py-5 text-muted">No upcoming events found.</div>
+}
+else
+{
+    <div class="row g-4">
+        @foreach (var evt in events)
+        {
+            <div class="col-md-6 col-lg-4">
+                <div class="card h-100 border-0 shadow-sm event-card">
+                    <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0 fw-bold">@evt.Name</h6>
+                        <span class="badge bg-primary">@evt.Date.ToString("dd MMM")</span>
+                    </div>
+                    <div class="card-body">
+                        <p class="mb-1 small"><strong>⏰</strong> @evt.Time.ToString(@"hh\:mm")</p>
+                        <p class="mb-1 small"><strong>📍</strong> @evt.Venue?.Name</p>
+                        <p class="text-muted small">@evt.Description</p>
+                        @if (evt.EventActivities.Any())
+                        {
+                            <div class="d-flex flex-wrap gap-1 mt-2">
+                                @foreach (var ea in evt.EventActivities)
+                                {
+                                    <span class="badge bg-light text-dark">@ea.Activity?.Name</span>
+                                }
+                            </div>
+                        }
+                    </div>
+                    <div class="card-footer bg-white border-0">
+                        @if (Session.IsLoggedIn)
+                        {
+                            <a href="/register" class="btn btn-primary btn-sm w-100">Register</a>
+                        }
+                        else
+                        {
+                            <a href="/login" class="btn btn-outline-secondary btn-sm w-100">Log in to Register</a>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+<style>
+    .event-card {
+        transition: transform 0.15s, box-shadow 0.15s;
+    }
+
+        .event-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.08) !important;
+        }
+</style>
+
+@code {
+    private List<Event>? events;
+    private DateTime? filterDate;
+    private string? filterActivity;
+
+    protected override async Task OnInitializedAsync() => await LoadEvents();
+
+    private async Task LoadEvents()
+    {
+        var all = await EventService.GetAllEventsAsync();
+        events = all.Where(e => e.Date >= DateTime.Today).ToList();
+    }
+
+    private async Task ApplyFilter()
+    {
+        var all = await EventService.GetAllEventsAsync();
+        events = all.Where(e =>
+            e.Date >= DateTime.Today &&
+            (!filterDate.HasValue || e.Date.Date == filterDate.Value.Date) &&
+            (string.IsNullOrEmpty(filterActivity) ||
+             e.EventActivities.Any(ea => ea.Activity?.Type == filterActivity))
+        ).ToList();
+    }
+
+    private async Task ClearFilter()
+    {
+        filterDate = null;
+        filterActivity = null;
+        await LoadEvents();
+    }
+}
